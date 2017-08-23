@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/ioctl.h>
 
 #include <sys/socket.h>
 #include <linux/if_packet.h>
@@ -18,6 +19,7 @@
 #define BYTES_IN_ROW 16
 
 void die(const char * str, int _errno);
+void sigint_handler(int _socket);
 
 /* Print data, pointed by @data into the @buf as hex values (i.e. 00 FF 00 ...)
  * 16 bytes in a row, separated by a space.
@@ -65,6 +67,31 @@ int main(const int argc, const char * argv[]) {
 	socklen_t src_addrll_len = sizeof(src_addrll);
 	int bytes_received = 0;
 
+	/*Putting eno1 into the promiscuous mode*/
+	struct ifreq ifr = { .ifr_name = "eno1" };
+	if(ioctl(ethernet_socket, SIOCGIFFLAGS, &ifr)<0) {
+		die("ioctl()",errno);
+	}
+
+	ifr.ifr_flags |= IFF_PROMISC;
+	if( ioctl(ethernet_socket, SIOCSIFFLAGS, &ifr) != 0 ) {
+		die("ioctl()",errno);
+	}
+
+	if(ioctl(ethernet_socket, SIOCGIFINDEX, &ifr)<0) {
+		die("ioctl()",errno);
+	}
+
+	struct packet_mreq mr;
+	memset(&mr, 0, sizeof(mr));
+	mr.mr_ifindex = ifr.ifr_ifindex;
+	mr.mr_type = PACKET_MR_PROMISC;
+	if(setsockopt(ethernet_socket, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mr, sizeof(mr)) < 0) {
+		die("setsockopt()",errno);
+	}
+
+	signal(SIGINT,sigint_handler);
+
 	while(1) {
 		if((bytes_received = recvfrom(ethernet_socket,
 					buffer,
@@ -82,13 +109,13 @@ int main(const int argc, const char * argv[]) {
 				src_addrll.sll_addr[3],
 				src_addrll.sll_addr[4],
 				src_addrll.sll_addr[5]);
-		printf("--------------------------------------\n");
+		printf("------------------------------------------------\n");
 		printf_data_hex(print_buffer,
-						DEF_BUFSIZE,
+						BIG_BUFSIZE,
 						(void*)buffer,
 						bytes_received);
 		printf("%s\n",print_buffer);
-		printf("--------------------------------------\n");
+		printf("------------------------------------------------\n");
 	}
 
 	close(ethernet_socket);
@@ -139,5 +166,22 @@ char * printf_packet(char * buf,
 		const void * data,
 		const unsigned int size,
 		const struct sockaddr_ll * _sockaddr_ll) {
+	//TODO: Implement the function
 	return NULL;
+}
+
+void sigint_handler(int _socket) {
+	/*struct ifreq ifr = { .ifr_name = "eno1" };
+	if(ioctl(_socket, SIOCGIFFLAGS, &ifr)<0) {
+		die("ioctl()",errno);
+	}
+
+	ifr.ifr_flags &= ~IFF_PROMISC;
+	if( ioctl(_socket, SIOCSIFFLAGS, &ifr) != 0 ) {
+		die("ioctl()",errno);
+	}*/
+
+	close(_socket);
+
+	exit(0);
 }

@@ -1,4 +1,4 @@
 CC=gcc
-CFLAGS=--std=c99 -Wall -Werror
+CFLAGS= -Wall -Werror
 
 main: main.o
