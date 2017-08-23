@@ -10,6 +10,7 @@
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <arpa/inet.h>
+#include <string.h>
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256
@@ -86,7 +87,7 @@ int main(const int argc, const char * argv[]) {
 						DEF_BUFSIZE,
 						(void*)buffer,
 						bytes_received);
-		//printf("%s\n",print_buffer);
+		printf("%s\n",print_buffer);
 		printf("--------------------------------------\n");
 	}
 
@@ -109,22 +110,23 @@ char * printf_data_hex(char * buf,
 
 	unsigned int i = 0;
 	unsigned int bufsize_left = bufsize;
+	unsigned int delta = 0;
 	unsigned char * _data = (unsigned char *)(data);
 
 	for(;((i < size) && (bufsize_left > 0));i++) {
 		if(((i % BYTES_IN_ROW) == 0) && (i != 0))
-			strncat(buf,"\n",bufsize_left);
+			strncat(buf,"\n",bufsize_left--);
 
-		delta = snprintf(place_to_write,
-				bufsize_left,
+		delta = snprintf(local_buffer,
+				DEF_BUFSIZE,
 				"%02X ",
-				_data[i]) - 1; //-1 due to printing '\0'
+				_data[i]);
 
 		if(delta > bufsize_left) {
 			fprintf(stdout,"Not enoght size in buffer!\n");
 			return NULL;
 		} else {
-			place_to_write += delta;
+			strncat(buf,local_buffer,delta);
 			bufsize_left -= delta;
 		}
 	}
