@@ -7,6 +7,7 @@
 
 #include <sys/socket.h>
 #include <linux/if_packet.h>
+#include <net/if.h>
 #include <net/ethernet.h>
 #include <arpa/inet.h>
 
@@ -14,13 +15,21 @@
 #define DEF_PKTBUFSIZE 2000
 
 void die(const char * str, int _errno);
-void printf_data_hex(const void * data, const unsigned int size);
 
-int main(void) {
+char * printf_data_hex(char * buf,
+		const unsigned int bufsize,
+		const void * data,
+		const unsigned int size);
+
+void printf_packet(const void * data,
+		const unsigned int size,
+		const struct sockaddr_ll * _sockaddr_ll);
+
+int main(const int argc, const char * argv[]) {
 	char buffer[DEF_PKTBUFSIZE] = {0};
 
-	int raw_socket = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-	if(raw_socket == -1) {
+	int ethernet_socket = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	if(ethernet_socket == -1) {
 		die("socket()",errno);
 	}
 
@@ -29,7 +38,7 @@ int main(void) {
 	int bytes_received = 0;
 
 	while(1) {
-		if((bytes_received = recvfrom(raw_socket,
+		if((bytes_received = recvfrom(ethernet_socket,
 					buffer,
 					sizeof(buffer),
 					0,
@@ -38,10 +47,6 @@ int main(void) {
 			die("socket()",errno);
 		}
 
-		printf("Interface index: %d\n",src_addrll.sll_ifindex);
-		printf("Hardware type: %u\n",src_addrll.sll_hatype);
-		printf("Packet type: %u\n",(unsigned int)src_addrll.sll_pkttype);
-		printf("Length addr: %u\n",(unsigned int)src_addrll.sll_halen);
 		printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
 				src_addrll.sll_addr[0],
 				src_addrll.sll_addr[1],
@@ -52,10 +57,9 @@ int main(void) {
 		printf("--------------------------------------\n");
 		printf_data_hex((void*)buffer,bytes_received);
 		printf("--------------------------------------\n");
-		//printf("%.*s\n",bytes_received,buffer);
 	}
 
-	close(raw_socket);
+	close(ethernet_socket);
 
 	return 0;
 }
@@ -73,4 +77,10 @@ void printf_data_hex(const void * data, const unsigned int size) {
 		printf("%02X ",_data[i]);
 	}
 	printf("\n");
+}
+
+void printf_packet(const void * data,
+		const unsigned int size,
+		const struct sockaddr_ll * _sockaddr_ll) {
+		
 }
