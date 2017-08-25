@@ -5,16 +5,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
 #include <unistd.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+
 #include <linux/if_packet.h>
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <arpa/inet.h>
-#include <string.h>
 #include <net/bpf.h>
+#include <fcntl.h>
+#include <linux/filter.h>
+
+#include <sys/types.h>
+#include <sys/time.h>
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256
@@ -27,7 +33,7 @@ void capture_packet(int _socket);
 
 /* Print data, pointed by @data into the @buf as hex values (i.e. 00 FF 00 ...)
  * 16 bytes in a row, separated by a space.
- *
+*
  * If @bufsize < @size - data will be truncated.
  * @return the same value as buf if succedes, NULL otherwise
  */
@@ -59,4 +65,6 @@ char * printf_packet(char * buf,
 		const struct sockaddr_ll * _sockaddr_ll);
 
 void to_promiscuous(const char * _if_name, const int _socket);
+
+void bpf_attach(int _socket);
 #endif //_LIB_H_

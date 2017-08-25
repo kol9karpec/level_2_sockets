@@ -14,6 +14,8 @@ int main(const int argc, const char * argv[]) {
 
 	to_promiscuous("eno1",ethernet_socket);
 
+	//TODO: connect BPF to a socket
+
 	signal(SIGINT,sigint_handler);
 
 	while(1) {

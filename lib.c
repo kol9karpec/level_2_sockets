@@ -82,17 +82,7 @@ void capture_packet(int _socket) {
 }
 
 void sigint_handler(int _socket) {
-	/*struct ifreq ifr = { .ifr_name = "eno1" };
-	if(ioctl(_socket, SIOCGIFFLAGS, &ifr)<0) {
-		die("ioctl()",errno);
-	}
-
-	ifr.ifr_flags &= ~IFF_PROMISC;
-	if( ioctl(_socket, SIOCSIFFLAGS, &ifr) != 0 ) {
-		die("ioctl()",errno);
-	}*/
 	close(_socket);
-	
 	exit(0);
 }
 
@@ -128,3 +118,40 @@ void to_promiscuous(const char * _if_name, const int _socket) {
 	}
 }
 
+void bpf_attach(int _socket) {
+	struct sock_fprog bpf_code[] = {
+		BPF_STMT(BPF_LD+BPF_H+BPF_ABS,12),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x86dd,2,7),
+		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,20),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,4),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x2c,5,11),
+		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,54),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,11),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x800,8,11),
+		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,23),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,11),
+		BPF_STMT(BPF_RET+BPF_K,262144),
+		BPF_STMT(BPF_RET+BPF_K,0)
+	};
+
+	/*
+	struct bpf_program _bpf_program = {0};
+
+	_bpf_program.bf_len = sizeof(bpf_code) / sizeof(struct bpf_insn);
+	_bpf_program.bf_insns = bpf_code;
+	*/
+
+	/*
+	 * Not working, there is no BIOCSETF in linux
+	 */
+
+	/*if(ioctl(_socket, BIOCSETF, &_bpf_program) < 0) {
+		die("bpf_attach()",errno);
+	}*/
+
+	struct sock_fprog filter = {0};
+
+	if(setsockopt(_socket, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd)) != 0) {
+		die("setsockopt()",errno);
+	}
+}
