@@ -15,12 +15,7 @@
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <arpa/inet.h>
-#include <net/bpf.h>
-#include <fcntl.h>
 #include <linux/filter.h>
-
-#include <sys/types.h>
-#include <sys/time.h>
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256

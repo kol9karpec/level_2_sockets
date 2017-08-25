@@ -1,6 +1,6 @@
 CC=gcc
-CFLAGS= -Wall -Werror
-OBJS=main.o lib.o
+CFLAGS= -Wall -Werror 
+OBJS=main.o lib.o 
 
 main: $(OBJS)
 

@@ -119,7 +119,7 @@ void to_promiscuous(const char * _if_name, const int _socket) {
 }
 
 void bpf_attach(int _socket) {
-	struct sock_fprog bpf_code[] = {
+	struct bpf_insn bpf_code[] = {
 		BPF_STMT(BPF_LD+BPF_H+BPF_ABS,12),
 		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x86dd,2,7),
 		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,20),
@@ -149,7 +149,8 @@ void bpf_attach(int _socket) {
 		die("bpf_attach()",errno);
 	}*/
 
-	struct sock_fprog filter = {0};
+	int prog_fd = bpf_prog_load(BPF_PROG_TYPE_SOCKET_FILTER, bpf_code, sizeof(bpf_code), "GPL");
+
 
 	if(setsockopt(_socket, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd)) != 0) {
 		die("setsockopt()",errno);
