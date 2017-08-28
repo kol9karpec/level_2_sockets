@@ -10,12 +10,15 @@
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include <linux/if_packet.h>
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <arpa/inet.h>
 #include <linux/filter.h>
+#include <linux/bpf.h>
+//#include <uapi/linux/bpf.h>
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256

@@ -130,26 +130,21 @@ void bpf_attach(int _socket) {
 		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x800,8,11),
 		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,23),
 		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,11),
-		BPF_STMT(BPF_RET+BPF_K,262144),
+		BPF_STMT(BPF_RET+BPF_K,*(__u32*)(262144)),
 		BPF_STMT(BPF_RET+BPF_K,0)
 	};
 
-	/*
-	struct bpf_program _bpf_program = {0};
+	union bpf_attr attr = {
+		.prog_type = BPF_PROG_TYPE_SOCKET_FILTER,
+		.insns     = (__u64)(unsigned long)(bpf_code),
+		.insn_cnt  = sizeof(bpf_code)/sizeof(struct bpf_insn),
+		.license   = (__u64)(unsigned long)("GPL"),
+		.log_buf   = (__u64)(unsigned long)(NULL),
+		.log_size  = 0,
+		.log_level = 1,
+	};
 
-	_bpf_program.bf_len = sizeof(bpf_code) / sizeof(struct bpf_insn);
-	_bpf_program.bf_insns = bpf_code;
-	*/
-
-	/*
-	 * Not working, there is no BIOCSETF in linux
-	 */
-
-	/*if(ioctl(_socket, BIOCSETF, &_bpf_program) < 0) {
-		die("bpf_attach()",errno);
-	}*/
-
-	int prog_fd = bpf_prog_load(BPF_PROG_TYPE_SOCKET_FILTER, bpf_code, sizeof(bpf_code), "GPL");
+	int prog_fd = bpf(BPF_PROG_LOAD, &attr,sizeof(attr));
 
 
 	if(setsockopt(_socket, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd)) != 0) {
