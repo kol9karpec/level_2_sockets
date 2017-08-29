@@ -1,6 +1,12 @@
 #include "./lib.h"
 
 static void print_delimiter(FILE * stream, char delim, int count);
+static void print_mac(FILE * stream, const uint8_t * mac);
+static void parse_ehternet(FILE * stream, const void * data);
+//static void parse_ip(FILE * stream, void * data);
+//static void parse_ipv6(FILE * stream, void * data);
+//static void parse_tcp(FILE * stream, void * data);
+//static void parse_udp(FILE * stream, void * data);
 
 void die(const char * str, int _errno) {
 	printf("%s: %s\n",str,strerror(_errno));
@@ -10,6 +16,7 @@ void die(const char * str, int _errno) {
 void fprintf_data_hex(FILE * stream,
 		const void * data,
 		const unsigned int size) {
+
 	unsigned int i = 0;
 	unsigned char * _data = (unsigned char *)(data);
 
@@ -25,14 +32,7 @@ void fprintf_packet(FILE * stream,
 		const void * data,
 		const unsigned int size,
 		const struct sockaddr_ll * _sockaddr_ll) {
-	fprintf(stream, 
-			"MAC: %02x:%02x:%02x:%02x:%02x:%02x",
-			_sockaddr_ll->sll_addr[0],
-			_sockaddr_ll->sll_addr[1],
-			_sockaddr_ll->sll_addr[2],
-			_sockaddr_ll->sll_addr[3],
-			_sockaddr_ll->sll_addr[4],
-			_sockaddr_ll->sll_addr[5]);
+	parse_ehternet(stream,data);
 	print_delimiter(stream,'-',3*BYTES_IN_ROW);
 	fprintf_data_hex(stream,
 			data,
@@ -55,12 +55,13 @@ void capture_packet(int _socket, FILE * stream) {
 					&src_addrll_len)) < 0) {
 			die("socket()",errno);
 	}
-
+	
 	fprintf_packet(stream,buffer,bytes_received,&src_addrll);
 }
 
 void sigint_handler(int _socket) {
 	close(_socket);
+	printf("\n");
 	exit(0);
 }
 
@@ -104,3 +105,88 @@ static inline void print_delimiter(FILE * stream, char delim, int count) {
 	
 	fprintf(stream,"\n");
 }
+
+static inline void print_mac(FILE * stream, const uint8_t * mac) {
+	fprintf(stream,
+			"%02x:%02x:%02x:%02x:%02x:%02x",
+			mac[0],	mac[1],	mac[2],	mac[3],	mac[4],	mac[5]);
+}
+
+static void parse_ehternet(FILE * stream, const void * data) {
+	struct ether_header eth_header;
+	memset(&eth_header,0,sizeof(eth_header));
+
+	eth_header = *(struct ether_header*)(data);
+	fprintf(stream,"DST: ");
+	print_mac(stream,eth_header.ether_dhost);
+	fprintf(stream,"\tSRC: ");
+	print_mac(stream,eth_header.ether_shost);
+	fprintf(stream,"\tTYPE: ");
+
+	data += sizeof(struct ether_header);
+
+	switch(ntohs(eth_header.ether_type)) {
+		case ETHERTYPE_IP:
+			fprintf(stream,"IP");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			//parse_ip(stream,data);
+			break;
+		case ETHERTYPE_PUP:
+			fprintf(stream,"Xerox PUP");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_SPRITE:
+			fprintf(stream,"Sprite");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_ARP:
+			fprintf(stream,"Address resolution");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_REVARP:
+			fprintf(stream,"Reverse ARP");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_AT:
+			fprintf(stream,"AppleTalk protocol");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_AARP:
+			fprintf(stream,"AppleTalk ARP");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_VLAN:
+			fprintf(stream,"IEEE 802.1Q VLAN tagging");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_IPX:
+			fprintf(stream,"IPX");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_IPV6:
+			fprintf(stream,"IPV6");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+		case ETHERTYPE_LOOPBACK:
+			fprintf(stream,"Loopback");
+			print_delimiter(stream,'~',3*BYTES_IN_ROW);
+			break;
+	}
+}
+/*
+static void parse_ip(FILE * stream, void * data) {
+
+}
+
+static void parse_ipv6(FILE * stream, void * data) {
+
+}
+
+static void parse_tcp(FILE * stream, void * data) {
+
+}
+
+static void parse_udp(FILE * stream, void * data) {
+
+}
+*/

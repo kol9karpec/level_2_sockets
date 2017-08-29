@@ -18,20 +18,17 @@
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256
-#define DEF_PKTBUFSIZE 2000
+#define DEF_PKTBUFSIZE ETHER_MAX_LEN
 #define BYTES_IN_ROW 16
 
 void die(const char * str, int _errno);
 void sigint_handler(int _socket);
 void capture_packet(int _socket, FILE * stream);
 
-/* Print data, pointed by @data into the @buf as hex values (i.e. 00 FF 00 ...)
- * 16 bytes in a row, separated by a space.
+/* Print data, pointed by @data into the @stream as hex values (i.e. 00 FF 00 ...)
+ * BYTES_IN_ROW bytes in a row, separated by a space.
  *
- * If @bufsize < @size - data will be truncated.
- * @return the same value as buf if succedes, NULL otherwise
  */
-//TODO: update contract^
 void fprintf_data_hex(FILE * stream,
 		const void * data,
 		const unsigned int size);
@@ -46,8 +43,7 @@ void fprintf_data_hex(FILE * stream,
  *				XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX
  *				------------------------------------------------
  *
- * @buf - destination address
- * @bufsize - size of memory, allocated by a pointer @buf
+ * @stream - output stream
  * @data - packet data
  * @size - size of data
  * @_sockaddr_ll - argument of @recvfrom() function.
