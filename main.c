@@ -17,7 +17,7 @@ int main(const int argc, const char * argv[]) {
 	signal(SIGINT,sigint_handler);
 
 	while(1) {
-		capture_packet(ethernet_socket);
+		capture_packet(ethernet_socket,stdout);
 	}
 
 	/*Unreachable*/

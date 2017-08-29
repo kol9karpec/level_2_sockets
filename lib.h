@@ -23,7 +23,7 @@
 
 void die(const char * str, int _errno);
 void sigint_handler(int _socket);
-void capture_packet(int _socket);
+void capture_packet(int _socket, FILE * stream);
 
 /* Print data, pointed by @data into the @buf as hex values (i.e. 00 FF 00 ...)
  * 16 bytes in a row, separated by a space.
@@ -52,8 +52,7 @@ void fprintf_data_hex(FILE * stream,
  * @size - size of data
  * @_sockaddr_ll - argument of @recvfrom() function.
  */
-char * printf_packet(char * buf,
-		const unsigned int bufsize,
+void fprintf_packet(FILE * stream,
 		const void * data,
 		const unsigned int size,
 		const struct sockaddr_ll * _sockaddr_ll);

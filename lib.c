@@ -1,5 +1,7 @@
 #include "./lib.h"
 
+static void print_delimiter(FILE * stream, char delim, int count);
+
 void die(const char * str, int _errno) {
 	printf("%s: %s\n",str,strerror(_errno));
 	exit(1);
@@ -19,21 +21,30 @@ void fprintf_data_hex(FILE * stream,
 	}
 }
 
-char * printf_packet(char * buf,
-		const unsigned int bufsize,
+void fprintf_packet(FILE * stream,
 		const void * data,
 		const unsigned int size,
 		const struct sockaddr_ll * _sockaddr_ll) {
-	//TODO: Implement the function
-	return NULL;
+	fprintf(stream, 
+			"MAC: %02x:%02x:%02x:%02x:%02x:%02x",
+			_sockaddr_ll->sll_addr[0],
+			_sockaddr_ll->sll_addr[1],
+			_sockaddr_ll->sll_addr[2],
+			_sockaddr_ll->sll_addr[3],
+			_sockaddr_ll->sll_addr[4],
+			_sockaddr_ll->sll_addr[5]);
+	print_delimiter(stream,'-',3*BYTES_IN_ROW);
+	fprintf_data_hex(stream,
+			data,
+			size);
+	print_delimiter(stream,'-',3*BYTES_IN_ROW);
 }
 
-void capture_packet(int _socket) {
+void capture_packet(int _socket, FILE * stream) {
 	struct sockaddr_ll src_addrll;
 	socklen_t src_addrll_len = sizeof(src_addrll);
 	int bytes_received = 0;
 
-	char print_buffer[BIG_BUFSIZE] = {0};
 	char buffer[DEF_PKTBUFSIZE] = {0};
 
 	if((bytes_received = recvfrom(_socket,
@@ -43,29 +54,15 @@ void capture_packet(int _socket) {
 					(struct sockaddr *)&src_addrll,
 					&src_addrll_len)) < 0) {
 			die("socket()",errno);
-		}
+	}
 
-		printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
-				src_addrll.sll_addr[0],
-				src_addrll.sll_addr[1],
-				src_addrll.sll_addr[2],
-				src_addrll.sll_addr[3],
-				src_addrll.sll_addr[4],
-				src_addrll.sll_addr[5]);
-		printf("------------------------------------------------\n");
-		fprintf_data_hex(stdout,
-						(void*)buffer,
-						bytes_received);
-		printf("%s\n",print_buffer);
-		printf("------------------------------------------------\n");
-
+	fprintf_packet(stream,buffer,bytes_received,&src_addrll);
 }
 
 void sigint_handler(int _socket) {
 	close(_socket);
 	exit(0);
 }
-
 
 void to_promiscuous(const char * _if_name, const int _socket) {
 	/*Putting eno1 into the promiscuous mode*/
@@ -98,3 +95,12 @@ void to_promiscuous(const char * _if_name, const int _socket) {
 	}
 }
 
+static inline void print_delimiter(FILE * stream, char delim, int count) {
+	fprintf(stream,"\n");
+	unsigned int i = 0;
+	for(;i<count;i++) {
+		fprintf(stream,"%c",delim);
+	}
+	
+	fprintf(stream,"\n");
+}
