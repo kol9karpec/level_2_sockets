@@ -31,8 +31,8 @@ void capture_packet(int _socket);
  * If @bufsize < @size - data will be truncated.
  * @return the same value as buf if succedes, NULL otherwise
  */
-char * printf_data_hex(char * buf,
-		const unsigned int bufsize,
+//TODO: update contract^
+void fprintf_data_hex(FILE * stream,
 		const void * data,
 		const unsigned int size);
 

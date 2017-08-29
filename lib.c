@@ -5,34 +5,17 @@ void die(const char * str, int _errno) {
 	exit(1);
 }
 
-char * printf_data_hex(char * buf,
-		const unsigned int bufsize,
+void fprintf_data_hex(FILE * stream,
 		const void * data,
 		const unsigned int size) {
-	char local_buffer[DEF_BUFSIZE] = {0};
-	memset(buf,0,bufsize);
-
 	unsigned int i = 0;
-	unsigned int bufsize_left = bufsize;
-	unsigned int delta = 0;
 	unsigned char * _data = (unsigned char *)(data);
 
-	for(;((i < size) && (bufsize_left > 0));i++) {
+	for(;i < size;i++) {
 		if(((i % BYTES_IN_ROW) == 0) && (i != 0))
-			strncat(buf,"\n",bufsize_left--);
+			fprintf(stream, "\n");
 
-		delta = snprintf(local_buffer,
-				DEF_BUFSIZE,
-				"%02X ",
-				_data[i]);
-
-		if(delta > bufsize_left) {
-			fprintf(stdout,"Not enoght size in buffer!\n");
-			return NULL;
-		} else {
-			strncat(buf,local_buffer,delta);
-			bufsize_left -= delta;
-		}
+		fprintf(stream, "%02x ", _data[i]);
 	}
 
 	return buf;
@@ -72,7 +55,7 @@ void capture_packet(int _socket) {
 				src_addrll.sll_addr[4],
 				src_addrll.sll_addr[5]);
 		printf("------------------------------------------------\n");
-		printf_data_hex(print_buffer,
+		fprintf_data_hex(print_buffer,
 						BIG_BUFSIZE,
 						(void*)buffer,
 						bytes_received);
