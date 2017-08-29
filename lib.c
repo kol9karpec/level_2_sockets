@@ -17,8 +17,6 @@ void fprintf_data_hex(FILE * stream,
 
 		fprintf(stream, "%02x ", _data[i]);
 	}
-
-	return buf;
 }
 
 char * printf_packet(char * buf,
@@ -55,8 +53,7 @@ void capture_packet(int _socket) {
 				src_addrll.sll_addr[4],
 				src_addrll.sll_addr[5]);
 		printf("------------------------------------------------\n");
-		fprintf_data_hex(print_buffer,
-						BIG_BUFSIZE,
+		fprintf_data_hex(stdout,
 						(void*)buffer,
 						bytes_received);
 		printf("%s\n",print_buffer);
@@ -65,17 +62,7 @@ void capture_packet(int _socket) {
 }
 
 void sigint_handler(int _socket) {
-	/*struct ifreq ifr = { .ifr_name = "eno1" };
-	if(ioctl(_socket, SIOCGIFFLAGS, &ifr)<0) {
-		die("ioctl()",errno);
-	}
-
-	ifr.ifr_flags &= ~IFF_PROMISC;
-	if( ioctl(_socket, SIOCSIFFLAGS, &ifr) != 0 ) {
-		die("ioctl()",errno);
-	}*/
 	close(_socket);
-	
 	exit(0);
 }
 
