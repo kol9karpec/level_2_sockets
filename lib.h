@@ -12,6 +12,7 @@
 #include <linux/if_packet.h>
 #include <net/if.h>
 #include <net/ethernet.h>
+#include <linux/ip.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <net/bpf.h>

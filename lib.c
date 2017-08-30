@@ -3,10 +3,14 @@
 static void print_delimiter(FILE * stream, char delim, int count);
 static void print_mac(FILE * stream, const uint8_t * mac);
 static void parse_ehternet(FILE * stream, const void * data);
-//static void parse_ip(FILE * stream, void * data);
+static void parse_ip(FILE * stream, const void * data);
 //static void parse_ipv6(FILE * stream, void * data);
 //static void parse_tcp(FILE * stream, void * data);
 //static void parse_udp(FILE * stream, void * data);
+
+static void fprintf_binary(FILE * stream,
+		const void * data,
+		unsigned int size);
 
 void die(const char * str, int _errno) {
 	printf("%s: %s\n",str,strerror(_errno));
@@ -117,6 +121,8 @@ static void parse_ehternet(FILE * stream, const void * data) {
 	memset(&eth_header,0,sizeof(eth_header));
 
 	eth_header = *(struct ether_header*)(data);
+
+	fprintf(stream,"---Ethernet header---\n");
 	fprintf(stream,"DST: ");
 	print_mac(stream,eth_header.ether_dhost);
 	fprintf(stream,"\tSRC: ");
@@ -129,7 +135,7 @@ static void parse_ehternet(FILE * stream, const void * data) {
 		case ETHERTYPE_IP:
 			fprintf(stream,"IP");
 			print_delimiter(stream,'~',3*BYTES_IN_ROW);
-			//parse_ip(stream,data);
+			parse_ip(stream,data);
 			break;
 		case ETHERTYPE_PUP:
 			fprintf(stream,"Xerox PUP");
@@ -171,13 +177,37 @@ static void parse_ehternet(FILE * stream, const void * data) {
 			fprintf(stream,"Loopback");
 			print_delimiter(stream,'~',3*BYTES_IN_ROW);
 			break;
+		default:
+			fprintf(stream,"Unknown packet type: %#06x",
+					ntohs(eth_header.ether_type));
 	}
 }
-/*
-static void parse_ip(FILE * stream, void * data) {
 
+static void parse_ip(FILE * stream, const void * data) {
+	struct iphdr ip_header;
+	memset(&ip_header,0,sizeof(ip_header));
+
+	ip_header = *(struct iphdr*)(data);
+
+	fprintf(stream,"---IP header---\n");
+	fprintf(stream,"Version: %d\n",ip_header.version);
+	fprintf(stream,"Internet Header Length: %d\n",ip_header.ihl);
+	fprintf(stream,"Type of service: ");
+	fprintf_binary(stream,(void*)&ip_header.tos,sizeof(ip_header.tos));
+	fprintf(stream,"\nTotal length: %d\n",ntohs(ip_header.tot_len));
+	fprintf(stream,"Identification: %#06x\n",ntohs(ip_header.id));
+	fprintf(stream,"Fragment Offset: %#06x\n",ntohs(ip_header.frag_off));
+	fprintf(stream,"TTL: %d\n",ip_header.ttl);
+	fprintf(stream,"Protocol: %d\n",ip_header.protocol);
+	fprintf(stream,"Checksum: %#06x\n",ip_header.check);
+
+	struct in_addr buf_addr = {ip_header.saddr};
+	fprintf(stream,"Source: %s\n",inet_ntoa(buf_addr));
+	buf_addr.s_addr = ip_header.daddr;
+	fprintf(stream,"Destination: %s",inet_ntoa(buf_addr));
 }
 
+/*
 static void parse_ipv6(FILE * stream, void * data) {
 
 }
@@ -190,3 +220,19 @@ static void parse_udp(FILE * stream, void * data) {
 
 }
 */
+
+static inline void fprintf_binary(FILE * stream,
+		const void * data,
+		unsigned int size) {
+	unsigned char * _data = (unsigned char *)data;
+	unsigned int i = 0, j = 0;
+	unsigned char cur_byte = 0;
+
+	for(;i<size;i++) {
+		cur_byte = _data[i];
+		for(j=0;j<8;j++) {
+			fprintf(stream,"%c",((cur_byte & 0x80) ? '1' : '0'));
+			cur_byte <<= 1;
+		}
+	}
+}
