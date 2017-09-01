@@ -59,7 +59,6 @@ void capture_packet(int _socket, FILE * stream) {
 					&src_addrll_len)) < 0) {
 			die("socket()",errno);
 	}
-	
 	fprintf_packet(stream,buffer,bytes_received,&src_addrll);
 }
 
@@ -106,7 +105,7 @@ static inline void print_delimiter(FILE * stream, char delim, int count) {
 	for(;i<count;i++) {
 		fprintf(stream,"%c",delim);
 	}
-	
+
 	fprintf(stream,"\n");
 }
 
@@ -234,5 +233,36 @@ static inline void fprintf_binary(FILE * stream,
 			fprintf(stream,"%c",((cur_byte & 0x80) ? '1' : '0'));
 			cur_byte <<= 1;
 		}
+void bpf_attach(int _socket) {
+	struct bpf_insn bpf_code[] = {
+		BPF_STMT(BPF_LD+BPF_H+BPF_ABS,12),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x86dd,2,7),
+		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,20),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,4),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x2c,5,11),
+		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,54),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,11),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x800,8,11),
+		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,23),
+		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,11),
+		BPF_STMT(BPF_RET+BPF_K,*(__u32*)(262144)),
+		BPF_STMT(BPF_RET+BPF_K,0)
+	};
+
+	union bpf_attr attr = {
+		.prog_type = BPF_PROG_TYPE_SOCKET_FILTER,
+		.insns     = (__u64)(unsigned long)(bpf_code),
+		.insn_cnt  = sizeof(bpf_code)/sizeof(struct bpf_insn),
+		.license   = (__u64)(unsigned long)("GPL"),
+		.log_buf   = (__u64)(unsigned long)(NULL),
+		.log_size  = 0,
+		.log_level = 1,
+	};
+
+	int prog_fd = bpf(BPF_PROG_LOAD, &attr,sizeof(attr));
+
+
+	if(setsockopt(_socket, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd)) != 0) {
+		die("setsockopt()",errno);
 	}
 }

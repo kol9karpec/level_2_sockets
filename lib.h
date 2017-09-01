@@ -5,17 +5,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
 #include <unistd.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+
 #include <linux/if_packet.h>
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <linux/ip.h>
 #include <arpa/inet.h>
-#include <string.h>
-#include <net/bpf.h>
+#include <linux/filter.h>
+#include <linux/bpf.h>
+//#include <uapi/linux/bpf.h>
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256
@@ -55,4 +59,6 @@ void fprintf_packet(FILE * stream,
 		const struct sockaddr_ll * _sockaddr_ll);
 
 void to_promiscuous(const char * _if_name, const int _socket);
+
+void bpf_attach(int _socket);
 #endif //_LIB_H_
