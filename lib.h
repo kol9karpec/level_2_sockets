@@ -15,23 +15,33 @@
 #include <linux/if_packet.h>
 #include <net/if.h>
 #include <net/ethernet.h>
+#include <netinet/tcp.h>
+#include <netinet/ip.h>
 #include <arpa/inet.h>
-#include <linux/filter.h>
-#include <linux/bpf.h>
-//#include <uapi/linux/bpf.h>
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256
 #define DEF_PKTBUFSIZE 2000
 #define BYTES_IN_ROW 16
 
+struct pseudo_header
+{
+	u_int32_t source_address;
+	u_int32_t dest_address;
+	u_int8_t placeholder;
+	u_int8_t protocol;
+	u_int16_t tcp_length;
+};
+
+unsigned short csum(unsigned short *ptr, int nbytes);
+
 void die(const char * str, int _errno);
+
 void sigint_handler(int _socket);
-void capture_packet(int _socket);
 
 /* Print data, pointed by @data into the @buf as hex values (i.e. 00 FF 00 ...)
  * 16 bytes in a row, separated by a space.
-*
+ *
  * If @bufsize < @size - data will be truncated.
  * @return the same value as buf if succedes, NULL otherwise
  */
@@ -40,29 +50,12 @@ char * printf_data_hex(char * buf,
 		const void * data,
 		const unsigned int size);
 
-/* Prints packet, received by a level 2 socket if the following format:
- *
- *				Destination MAC: XX:XX:XX:XX:XX:XX
- *					 Source MAC: XX:XX:XX:XX:XX:XX
- *				------------------------------------------------
- *				XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX
- *				................................................
- *				XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX
- *				------------------------------------------------
- *
- * @buf - destination address
- * @bufsize - size of memory, allocated by a pointer @buf
- * @data - packet data
- * @size - size of data
- * @_sockaddr_ll - argument of @recvfrom() function.
- */
-char * printf_packet(char * buf,
-		const unsigned int bufsize,
-		const void * data,
-		const unsigned int size,
-		const struct sockaddr_ll * _sockaddr_ll);
+int run_wait(char * port);
+int run_connect(char * ip_addr, char * port);
 
-void to_promiscuous(const char * _if_name, const int _socket);
+int send_packet(int sock_fd, char * ip_addr, char * port,
+		char * data, int size);
+int receive_packet(int sock_fd, short port, char * dest, unsigned size);
+int open_socket();
 
-void bpf_attach(int _socket);
 #endif //_LIB_H_

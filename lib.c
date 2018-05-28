@@ -38,116 +38,166 @@ char * printf_data_hex(char * buf,
 	return buf;
 }
 
-char * printf_packet(char * buf,
-		const unsigned int bufsize,
-		const void * data,
-		const unsigned int size,
-		const struct sockaddr_ll * _sockaddr_ll) {
-	//TODO: Implement the function
-	return NULL;
-}
-
-void capture_packet(int _socket) {
-	struct sockaddr_ll src_addrll;
-	socklen_t src_addrll_len = sizeof(src_addrll);
-	int bytes_received = 0;
-
-	char print_buffer[BIG_BUFSIZE] = {0};
-	char buffer[DEF_PKTBUFSIZE] = {0};
-
-	if((bytes_received = recvfrom(_socket,
-					buffer,
-					sizeof(buffer),
-					0,
-					(struct sockaddr *)&src_addrll,
-					&src_addrll_len)) < 0) {
-			die("socket()",errno);
-		}
-
-		printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
-				src_addrll.sll_addr[0],
-				src_addrll.sll_addr[1],
-				src_addrll.sll_addr[2],
-				src_addrll.sll_addr[3],
-				src_addrll.sll_addr[4],
-				src_addrll.sll_addr[5]);
-		printf("------------------------------------------------\n");
-		printf_data_hex(print_buffer,
-						BIG_BUFSIZE,
-						(void*)buffer,
-						bytes_received);
-		printf("%s\n",print_buffer);
-		printf("------------------------------------------------\n");
-
-}
-
 void sigint_handler(int _socket) {
 	close(_socket);
 	exit(0);
 }
 
-
-void to_promiscuous(const char * _if_name, const int _socket) {
-	/*Putting eno1 into the promiscuous mode*/
-	struct ifreq ifr;
-	strncpy(ifr.ifr_name,_if_name,strlen(_if_name)+1);
-	if(ioctl(_socket, SIOCGIFFLAGS, &ifr)<0) {
-		die("ioctl()",errno);
+int run_wait(char * port) {
+	int s = open_socket();
+	char buf[256];
+	while(1) {
+		receive_packet(s, atoi(port), buf, 256);
+		printf("%s\n", buf);
 	}
-
-	ifr.ifr_flags |= IFF_PROMISC;
-	if( ioctl(_socket, SIOCSIFFLAGS, &ifr) != 0 ) {
-		die("ioctl()",errno);
-	}
-
-	/*Putting socket into promiscuous mode*/
-	if(ioctl(_socket, SIOCGIFINDEX, &ifr)<0) {
-		die("ioctl()",errno);
-	}
-
-	struct packet_mreq mr;
-	memset(&mr, 0, sizeof(mr));
-	mr.mr_ifindex = ifr.ifr_ifindex;
-	mr.mr_type = PACKET_MR_PROMISC;
-	if(setsockopt(_socket,
-				SOL_PACKET,
-				PACKET_ADD_MEMBERSHIP,
-				&mr,
-				sizeof(mr)) < 0) {
-		die("setsockopt()",errno);
-	}
+	return 0;
 }
 
-void bpf_attach(int _socket) {
-	struct bpf_insn bpf_code[] = {
-		BPF_STMT(BPF_LD+BPF_H+BPF_ABS,12),
-		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x86dd,2,7),
-		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,20),
-		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,4),
-		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x2c,5,11),
-		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,54),
-		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,11),
-		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x800,8,11),
-		BPF_STMT(BPF_LD+BPF_B+BPF_ABS,23),
-		BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,0x6,10,11),
-		BPF_STMT(BPF_RET+BPF_K,*(__u32*)(262144)),
-		BPF_STMT(BPF_RET+BPF_K,0)
-	};
+int run_connect(char * ip_addr, char * port) {
+	int s = open_socket();
+	char buf[256] = {0};
+	strcpy(buf, "Hello, world!");
 
-	union bpf_attr attr = {
-		.prog_type = BPF_PROG_TYPE_SOCKET_FILTER,
-		.insns     = (__u64)(unsigned long)(bpf_code),
-		.insn_cnt  = sizeof(bpf_code)/sizeof(struct bpf_insn),
-		.license   = (__u64)(unsigned long)("GPL"),
-		.log_buf   = (__u64)(unsigned long)(NULL),
-		.log_size  = 0,
-		.log_level = 1,
-	};
-
-	int prog_fd = bpf(BPF_PROG_LOAD, &attr,sizeof(attr));
-
-
-	if(setsockopt(_socket, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd)) != 0) {
-		die("setsockopt()",errno);
+	while(1) {
+		send_packet(s, ip_addr, port, buf, strlen(buf));
+		sleep(1);
 	}
+	return 0;
+}
+
+int open_socket() {
+	int s = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
+	int value = 1;
+	if(s == -1)
+	{
+		perror("Failed to create socket");
+		return -1;
+	}
+	setsockopt(s, IPPROTO_IP, SO_REUSEADDR, &value, sizeof(int));
+
+	return s;
+}
+
+int send_packet(int sock_fd, char * ip_addr, char * port,
+		char * data, int size) {
+	char datagram[4096],
+		source_ip[32],
+		*pseudogram;
+
+	//zero out the packet buffer
+	memset(datagram, 0, 4096);
+
+	//TCP header
+	struct tcphdr *tcph = (struct tcphdr *)(datagram);
+	struct sockaddr_in sin;
+	struct pseudo_header psh;
+
+	//Data part
+	strncpy(datagram + sizeof(struct tcphdr), data, size);
+
+	//some address resolution
+	strcpy(source_ip, "127.0.0.1");
+	sin.sin_family = AF_INET;
+	sin.sin_port = htons(atoi(port));
+	sin.sin_addr.s_addr = inet_addr(ip_addr);
+
+	//TCP Header
+	tcph->source = htons(1234);
+	tcph->dest = htons(atoi(port));
+	tcph->seq = 0;
+	tcph->ack_seq = 0;
+	tcph->doff = 5;  //tcp header size
+	tcph->fin=0;
+	tcph->syn=1;
+	tcph->rst=0;
+	tcph->psh=0;
+	tcph->ack=0;
+	tcph->urg=0;
+	tcph->window = htons(5840); /* maximum allowed window size */
+	tcph->check = 0; //leave checksum 0 now, filled later by pseudo header
+	tcph->urg_ptr = 0;
+
+	//Now the TCP checksum
+	psh.source_address = inet_addr(source_ip);
+	psh.dest_address = sin.sin_addr.s_addr;
+	psh.placeholder = 0;
+	psh.protocol = IPPROTO_TCP;
+	psh.tcp_length = htons(sizeof(struct tcphdr) + strlen(data));
+
+	int psize = sizeof(struct pseudo_header) + sizeof(struct tcphdr) + strlen(data);
+	pseudogram = malloc(psize);
+
+	memcpy(pseudogram, (char*)&psh, sizeof(struct pseudo_header));
+	memcpy(pseudogram + sizeof(struct pseudo_header), tcph,
+			sizeof(struct tcphdr) + strlen(data));
+
+	tcph->check = csum((unsigned short*) pseudogram , psize);
+	psize -= sizeof(struct pseudo_header);
+
+	if (sendto(sock_fd, datagram, psize,
+				0, (struct sockaddr *)&sin, sizeof (sin)) < 0) {
+		perror("sendto failed");
+		return -1;
+	} else {
+		printf("Packet Send. Length : %d \n" , psize);
+	}
+
+	return 0;
+}
+
+int receive_packet(int sock_fd, short port, char * dest, unsigned size) {
+	struct tcphdr * tcph = NULL;
+	char * data = NULL;
+	char buf[256];
+	int len = 0;
+	struct sockaddr_in server_addr = {
+		.sin_family = AF_INET,
+		.sin_port = htons(port),
+		.sin_addr.s_addr = inet_addr("127.0.0.1")
+	}; //server_addr
+
+	if(bind(sock_fd, (struct sockaddr *)(&server_addr),
+				sizeof(server_addr))) {
+		perror("bind() error");
+		return -1;
+	}
+
+	do {
+		len = recv(sock_fd, buf, 256, 0);
+		tcph = (struct tcphdr *)(buf + sizeof(struct iphdr));
+		data = (char *)(buf + sizeof(struct tcphdr) + sizeof(struct iphdr));
+	} while(ntohs(tcph->dest) != port);
+
+	memcpy(dest, data,
+			(len - sizeof(struct iphdr) - sizeof(struct tcphdr)) % size);
+	return 0;
+}
+
+/*
+ *     Generic checksum calculation function
+ */
+unsigned short csum(unsigned short *ptr, int nbytes) 
+{
+	register long sum;
+	unsigned short oddbyte;
+	register short answer;
+
+	sum = 0;
+
+	while(nbytes > 1) {
+		sum += *ptr++;
+		nbytes -= 2;
+	}
+
+	if(nbytes == 1) {
+		oddbyte = 0;
+		*((u_char*)&oddbyte) = *(u_char*)ptr;
+		sum += oddbyte;
+	}
+
+	sum = (sum>>16) + (sum & 0xffff);
+	sum = sum + (sum>>16);
+	answer = (short)~sum;
+
+	return(answer);
 }
