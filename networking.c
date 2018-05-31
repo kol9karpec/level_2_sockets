@@ -1,4 +1,4 @@
-#include "./lib.h"
+#include "networking.h"
 
 void die(const char * str, int _errno) {
 	printf("%s: %s\n",str,strerror(_errno));
@@ -10,12 +10,13 @@ char * printf_data_hex(char * buf,
 		const void * data,
 		const unsigned int size) {
 	char local_buffer[DEF_BUFSIZE] = {0};
-	memset(buf,0,bufsize);
 
 	unsigned int i = 0;
 	unsigned int bufsize_left = bufsize;
 	unsigned int delta = 0;
 	unsigned char * _data = (unsigned char *)(data);
+
+	memset(buf, 0, bufsize);
 
 	for(;((i < size) && (bufsize_left > 0));i++) {
 		if(((i % BYTES_IN_ROW) == 0) && (i != 0))
@@ -45,9 +46,12 @@ void sigint_handler(int _socket) {
 
 int run_wait(char * port) {
 	int s = open_socket();
-	char buf[256];
+	char buf[DATAGRAM_SIZE];
 	while(1) {
-		receive_packet(s, atoi(port), buf, 256);
+		if(receive_packet(s, atoi(port), buf, DATAGRAM_SIZE)) {
+			perror("receive_packet failed!");
+			break;
+		}
 		printf("%s\n", buf);
 	}
 	return 0;
@@ -55,7 +59,7 @@ int run_wait(char * port) {
 
 int run_connect(char * ip_addr, char * port) {
 	int s = open_socket();
-	char buf[256] = {0};
+	char buf[DATAGRAM_SIZE] = {0};
 	strcpy(buf, "Hello, world!");
 
 	while(1) {
@@ -79,34 +83,31 @@ int open_socket() {
 }
 
 int send_packet(int sock_fd, char * ip_addr, char * port,
-		char * data, int size) {
-	char datagram[4096],
-		source_ip[32],
-		*pseudogram;
+		void * data, int size) {
+	char datagram[DATAGRAM_SIZE],
+		source_ip[32];
 
-	//zero out the packet buffer
-	memset(datagram, 0, 4096);
+	unsigned datagram_size = sizeof(struct tcphdr) + size;
 
-	//TCP header
-	struct tcphdr *tcph = (struct tcphdr *)(datagram);
 	struct sockaddr_in sin;
+	struct tcphdr *tcph = (struct tcphdr *)(datagram);
 	struct pseudo_header psh;
+	char * pseudogram;
+	int psize = sizeof(struct pseudo_header) + datagram_size;
 
-	//Data part
-	strncpy(datagram + sizeof(struct tcphdr), data, size);
+	memset(datagram, 0, DATAGRAM_SIZE);
+	memcpy(datagram + sizeof(struct tcphdr), data, size);
 
-	//some address resolution
 	strcpy(source_ip, "127.0.0.1");
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(atoi(port));
 	sin.sin_addr.s_addr = inet_addr(ip_addr);
 
-	//TCP Header
 	tcph->source = htons(1234);
 	tcph->dest = htons(atoi(port));
 	tcph->seq = 0;
 	tcph->ack_seq = 0;
-	tcph->doff = 5;  //tcp header size
+	tcph->doff = 5;
 	tcph->fin=0;
 	tcph->syn=1;
 	tcph->rst=0;
@@ -114,47 +115,44 @@ int send_packet(int sock_fd, char * ip_addr, char * port,
 	tcph->ack=0;
 	tcph->urg=0;
 	tcph->window = htons(5840); /* maximum allowed window size */
-	tcph->check = 0; //leave checksum 0 now, filled later by pseudo header
+	tcph->check = 0;
 	tcph->urg_ptr = 0;
 
-	//Now the TCP checksum
 	psh.source_address = inet_addr(source_ip);
 	psh.dest_address = sin.sin_addr.s_addr;
 	psh.placeholder = 0;
 	psh.protocol = IPPROTO_TCP;
-	psh.tcp_length = htons(sizeof(struct tcphdr) + strlen(data));
+	psh.tcp_length = htons(sizeof(struct tcphdr) + size);
 
-	int psize = sizeof(struct pseudo_header) + sizeof(struct tcphdr) + strlen(data);
 	pseudogram = malloc(psize);
 
 	memcpy(pseudogram, (char*)&psh, sizeof(struct pseudo_header));
 	memcpy(pseudogram + sizeof(struct pseudo_header), tcph,
-			sizeof(struct tcphdr) + strlen(data));
+			sizeof(struct tcphdr) + size);
 
 	tcph->check = csum((unsigned short*) pseudogram , psize);
-	psize -= sizeof(struct pseudo_header);
 
-	if (sendto(sock_fd, datagram, psize,
-				0, (struct sockaddr *)&sin, sizeof (sin)) < 0) {
+	if (sendto(sock_fd, datagram, datagram_size,
+				0, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
 		perror("sendto failed");
 		return -1;
 	} else {
-		printf("Packet Send. Length : %d \n" , psize);
+		printf("Packet send. Length : %d \n" , datagram_size);
 	}
 
 	return 0;
 }
 
-int receive_packet(int sock_fd, short port, char * dest, unsigned size) {
+int receive_packet(int sock_fd, short port, void * dest, unsigned size) {
 	struct tcphdr * tcph = NULL;
 	char * data = NULL;
-	char buf[256];
+	char buf[DATAGRAM_SIZE];
 	int len = 0;
-	struct sockaddr_in server_addr = {
-		.sin_family = AF_INET,
-		.sin_port = htons(port),
-		.sin_addr.s_addr = inet_addr("127.0.0.1")
-	}; //server_addr
+	struct sockaddr_in server_addr = {0};
+
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(port);
+	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 	if(bind(sock_fd, (struct sockaddr *)(&server_addr),
 				sizeof(server_addr))) {
@@ -163,7 +161,7 @@ int receive_packet(int sock_fd, short port, char * dest, unsigned size) {
 	}
 
 	do {
-		len = recv(sock_fd, buf, 256, 0);
+		len = recv(sock_fd, buf, DATAGRAM_SIZE, 0);
 		tcph = (struct tcphdr *)(buf + sizeof(struct iphdr));
 		data = (char *)(buf + sizeof(struct tcphdr) + sizeof(struct iphdr));
 	} while(ntohs(tcph->dest) != port);
@@ -178,11 +176,9 @@ int receive_packet(int sock_fd, short port, char * dest, unsigned size) {
  */
 unsigned short csum(unsigned short *ptr, int nbytes) 
 {
-	register long sum;
+	register long sum = 0;
 	unsigned short oddbyte;
 	register short answer;
-
-	sum = 0;
 
 	while(nbytes > 1) {
 		sum += *ptr++;

@@ -2,14 +2,14 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 
-#include "./lib.h"
+#include "networking.h"
 #define ARGS_NUM 2
 
 static void print_help(FILE * file);
 
 int main(const int argc, const char * argv[]) {
-	signal(SIGINT, sigint_handler);
 	int connection_socket = 0;
+	signal(SIGINT, sigint_handler);
 
 	if (argc < ARGS_NUM) {
 		goto print_help;

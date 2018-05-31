@@ -1,10 +1,10 @@
 CC=gcc
-CFLAGS= -Wall -Werror
-OBJS=main.o lib.o
+CFLAGS= -Wall -Werror -pedantic
+OBJS=main.o networking.o
 
 main: $(OBJS)
 
 clean: 
-	@rm -f main.o main $(OBJS) 
+	@rm -f main $(OBJS) 
 
 .PHONY: clean

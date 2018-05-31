@@ -23,6 +23,7 @@
 #define DEF_BUFSIZE 256
 #define DEF_PKTBUFSIZE 2000
 #define BYTES_IN_ROW 16
+#define DATAGRAM_SIZE 4096
 
 struct pseudo_header
 {
@@ -36,7 +37,6 @@ struct pseudo_header
 unsigned short csum(unsigned short *ptr, int nbytes);
 
 void die(const char * str, int _errno);
-
 void sigint_handler(int _socket);
 
 /* Print data, pointed by @data into the @buf as hex values (i.e. 00 FF 00 ...)
@@ -54,8 +54,8 @@ int run_wait(char * port);
 int run_connect(char * ip_addr, char * port);
 
 int send_packet(int sock_fd, char * ip_addr, char * port,
-		char * data, int size);
-int receive_packet(int sock_fd, short port, char * dest, unsigned size);
+		void * data, int size);
+int receive_packet(int sock_fd, short port, void * dest, unsigned size);
 int open_socket();
 
-#endif //_LIB_H_
+#endif /* _LIB_H_ */
