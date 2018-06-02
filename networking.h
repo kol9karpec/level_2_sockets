@@ -18,6 +18,7 @@
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include "gamelib.h"
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256
@@ -50,12 +51,13 @@ char * printf_data_hex(char * buf,
 		const void * data,
 		const unsigned int size);
 
-int run_wait(char * port);
-int run_connect(char * ip_addr, char * port);
+int run_wait(short port);
+int run_connect(char * ip_addr, short dest_port, short our_port);
 
-int send_packet(int sock_fd, char * ip_addr, char * port,
+int send_packet(int sock_fd, char * ip_addr, short dest_port, short src_port,
 		void * data, int size);
-int receive_packet(int sock_fd, short port, void * dest, unsigned size);
+int receive_packet(int sock_fd, short port, void * dest, unsigned size,
+		short * src_port, char * src_ip);
 int open_socket();
 
 #endif /* _LIB_H_ */

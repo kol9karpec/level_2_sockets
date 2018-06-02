@@ -1,6 +1,6 @@
 CC=gcc
-CFLAGS= -Wall -Werror -pedantic
-OBJS=main.o networking.o
+CFLAGS= -Wall -Werror 
+OBJS=main.o networking.o gamelib.o
 
 main: $(OBJS)
 

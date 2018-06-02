@@ -44,28 +44,96 @@ void sigint_handler(int _socket) {
 	exit(0);
 }
 
-int run_wait(char * port) {
+int run_wait(short our_port) {
 	int s = open_socket();
-	char buf[DATAGRAM_SIZE];
-	while(1) {
-		if(receive_packet(s, atoi(port), buf, DATAGRAM_SIZE)) {
-			perror("receive_packet failed!");
-			break;
-		}
-		printf("%s\n", buf);
+	char buf[DATAGRAM_SIZE] = {0};
+	int bufsize = 0;
+	char receive_buf[DATAGRAM_SIZE] = {0};
+	int receive_buf_len = 0;
+	char src_ip_addr[16] = {0};
+	short src_port = 0;
+
+	packet_header_t header = {
+		.type = CONNECTION
+	};
+
+	connection_packet_t packet = {
+		.type = RESP,
+		.code = ACCEPT
+	};
+
+	packet_header_t * rc_header = NULL;
+	connection_packet_t * rc_packet = NULL;
+
+	receive_buf_len = receive_packet(s, our_port, receive_buf, DATAGRAM_SIZE,
+			&src_port, src_ip_addr);
+	if (receive_buf_len < 0) {
+		printf("receive_packet error!\n");
+		return -1;
 	}
+
+	rc_header = (packet_header_t *)receive_buf;
+	rc_packet = (connection_packet_t *)(receive_buf + sizeof(packet_header_t));
+
+	if (rc_header->type == CONNECTION && rc_packet->type == REQ) {
+		printf("Connection request received!\n");
+	}
+
+	memcpy(buf + bufsize, &header, sizeof(header));
+	bufsize += sizeof(header);
+	memcpy(buf + bufsize, &packet, sizeof(packet));
+	bufsize += sizeof(packet);
+
+	printf("ip_addr to sent = %s\n", src_ip_addr);
+	printf("src_port = %d\n", src_port);
+	send_packet(s, src_ip_addr, src_port, our_port, buf, bufsize);
+
 	return 0;
 }
 
-int run_connect(char * ip_addr, char * port) {
+int run_connect(char * ip_addr, short dest_port, short our_port) {
 	int s = open_socket();
 	char buf[DATAGRAM_SIZE] = {0};
-	strcpy(buf, "Hello, world!");
+	int bufsize = 0;
+	char receive_buf[DATAGRAM_SIZE] = {0};
+	int receive_buf_len = 0;
 
-	while(1) {
-		send_packet(s, ip_addr, port, buf, strlen(buf));
-		sleep(1);
+	packet_header_t header = {
+		.type = CONNECTION
+	};
+
+	connection_packet_t packet = {
+		.type = REQ,
+		.code = ACCEPT
+	};
+
+	packet_header_t * rc_header = NULL;
+	connection_packet_t * rc_packet = NULL;
+
+	memcpy(buf + bufsize, &header, sizeof(header));
+	bufsize += sizeof(header);
+	memcpy(buf + bufsize, &packet, sizeof(packet));
+	bufsize += sizeof(packet);
+
+	send_packet(s, ip_addr, dest_port, our_port, buf, bufsize);
+
+	receive_buf_len = receive_packet(s, our_port, receive_buf, DATAGRAM_SIZE,
+			NULL, NULL);
+	if (receive_buf_len < 0) {
+		printf("receive_packet error!\n");
+		return -1;
 	}
+
+	rc_header = (packet_header_t *)receive_buf;
+	rc_packet = (connection_packet_t *)(receive_buf + sizeof(packet_header_t));
+
+	if (rc_header->type == CONNECTION && rc_packet->type == RESP &&\
+			rc_packet->code == ACCEPT) {
+		printf("Connection accepted!\n");
+	} else {
+		printf("Connection denied!\n");
+	}
+
 	return 0;
 }
 
@@ -82,7 +150,7 @@ int open_socket() {
 	return s;
 }
 
-int send_packet(int sock_fd, char * ip_addr, char * port,
+int send_packet(int sock_fd, char * ip_addr, short dest_port, short src_port,
 		void * data, int size) {
 	char datagram[DATAGRAM_SIZE],
 		source_ip[32];
@@ -100,11 +168,11 @@ int send_packet(int sock_fd, char * ip_addr, char * port,
 
 	strcpy(source_ip, "127.0.0.1");
 	sin.sin_family = AF_INET;
-	sin.sin_port = htons(atoi(port));
+	sin.sin_port = htons(dest_port);
 	sin.sin_addr.s_addr = inet_addr(ip_addr);
 
-	tcph->source = htons(1234);
-	tcph->dest = htons(atoi(port));
+	tcph->source = htons(src_port);
+	tcph->dest = htons(dest_port);
 	tcph->seq = 0;
 	tcph->ack_seq = 0;
 	tcph->doff = 5;
@@ -143,12 +211,16 @@ int send_packet(int sock_fd, char * ip_addr, char * port,
 	return 0;
 }
 
-int receive_packet(int sock_fd, short port, void * dest, unsigned size) {
+int receive_packet(int sock_fd, short port, void * dest, unsigned size,
+		short * src_port, char * src_ip) {
 	struct tcphdr * tcph = NULL;
+	struct iphdr * iphdr = NULL;
 	char * data = NULL;
 	char buf[DATAGRAM_SIZE];
 	int len = 0;
+	int data_len = 0;
 	struct sockaddr_in server_addr = {0};
+	char * src_ip_addr = NULL;
 
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
@@ -161,14 +233,23 @@ int receive_packet(int sock_fd, short port, void * dest, unsigned size) {
 	}
 
 	do {
-		len = recv(sock_fd, buf, DATAGRAM_SIZE, 0);
 		tcph = (struct tcphdr *)(buf + sizeof(struct iphdr));
-		data = (char *)(buf + sizeof(struct tcphdr) + sizeof(struct iphdr));
+		len = recv(sock_fd, buf, DATAGRAM_SIZE, 0);
 	} while(ntohs(tcph->dest) != port);
 
-	memcpy(dest, data,
-			(len - sizeof(struct iphdr) - sizeof(struct tcphdr)) % size);
-	return 0;
+	if (src_ip) {
+		iphdr = (struct iphdr *)(buf);
+		src_ip_addr = inet_ntoa(*((struct in_addr *)(&iphdr->saddr)));
+		memcpy(src_ip, src_ip_addr, strlen(src_ip_addr));
+	}
+	if (src_port)
+		*src_port = ntohs(tcph->source);
+	data = (char *)(buf + sizeof(struct tcphdr) + sizeof(struct iphdr));
+
+	data_len = len - sizeof(struct iphdr) - sizeof(struct tcphdr);
+	memcpy(dest, data, data_len % size);
+
+	return data_len;
 }
 
 /*
