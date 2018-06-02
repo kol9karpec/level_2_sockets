@@ -232,10 +232,10 @@ int receive_packet(int sock_fd, short port, void * dest, unsigned size,
 		return -1;
 	}
 
+	tcph = (struct tcphdr *)(buf + sizeof(struct iphdr));
 	do {
-		tcph = (struct tcphdr *)(buf + sizeof(struct iphdr));
 		len = recv(sock_fd, buf, DATAGRAM_SIZE, 0);
-	} while(ntohs(tcph->dest) != port);
+	} while(ntohs(tcph->dest) != port || tcph->ack);
 
 	if (src_ip) {
 		iphdr = (struct iphdr *)(buf);
