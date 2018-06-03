@@ -7,32 +7,34 @@
 #include "gamelib.h"
 #include "networking.h"
 #include "common.h"
+
 #define ARGS_NUM 1
 
 static void print_help(FILE * file);
 
-field_t play_field = {
-	.size = 3,
-	.matr = NULL
-};
-
 int main(const int argc, const char * argv[]) {
-	int connection_socket = 0;
 	signal(SIGINT, sigint_handler);
 
 	if (argc < ARGS_NUM) {
 		goto print_help;
 	} else {
+		_connection_socket_fd = open_socket();
+
 		if (strcmp(argv[1], "connect") == 0) {
-			if((connection_socket = run_connect((char *)argv[2])) == -1) {
+			int res = run_connect((char *)argv[2]);
+			if(res == -1) {
 				goto error;
+			} else if (res == -2) {
+				printf("Connection denied!\n");
 			}
-			//START game
+
+			start_game(X);
 		} else if (strcmp(argv[1], "wait") == 0) {
-			if((connection_socket = run_wait()) == -1) {
+			if(run_wait()) {
 				goto error;
 			}
-			//Start game
+
+			start_game(O);
 		} else {
 			goto print_help;
 		}

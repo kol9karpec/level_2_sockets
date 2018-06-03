@@ -28,6 +28,9 @@
 #define DATAGRAM_SIZE 4096
 #define IPPROTO_TTT 145
 
+extern char _connection_ip_addr[16];
+extern int _connection_socket_fd;
+
 struct pseudo_header
 {
 	u_int32_t source_address;
@@ -87,9 +90,9 @@ int send_packet(int sock_fd, char * dest_ip_addr, void * data, int size);
  *
  * param[in] sock_fs socket file descriptor created with params
  *		(AF_INET, SOCK_RAW, IPPROTO_TTT)
- * param[in] dest pointer to allocated memory where to put received packet
+ * param[out] dest pointer to allocated memory where to put received packet
  * param[in] size size of allocated memory, pointed to by dest
- * param[in] src_ip pointer to memory with size>=16 to put ip address of the
+ * param[out] src_ip pointer to memory with size>=16 to put ip address of the
  *		received packet if you want to save the addr, NULL if not
  *
  * @return length of packet, put to dest if succeeded, -1 if failed

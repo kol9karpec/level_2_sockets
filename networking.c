@@ -1,5 +1,8 @@
 #include "networking.h"
 
+char _connection_ip_addr[16] = {0};
+int _connection_socket_fd = 0;
+
 void die(const char * str, int _errno) {
 	printf("%s: %s\n",str,strerror(_errno));
 	exit(1);
@@ -45,14 +48,11 @@ void sigint_handler(int _socket) {
 }
 
 int run_wait() {
-	int s = open_socket();
-
 	char buf[DATAGRAM_SIZE] = {0};
 	int bufsize = 0;
 
 	char receive_buf[DATAGRAM_SIZE] = {0};
 	int receive_buf_len = 0;
-	char src_ip_addr[16] = {0};
 
 	packet_header_t header = {
 		.type = CONNECTION
@@ -68,31 +68,29 @@ int run_wait() {
 			sizeof(packet_header_t));
 
 	do {
-		receive_buf_len = receive_packet(s, receive_buf, DATAGRAM_SIZE,
-				src_ip_addr);
+		receive_buf_len = receive_packet(_connection_socket_fd, receive_buf, DATAGRAM_SIZE,
+				_connection_ip_addr);
 		if (receive_buf_len < 0) {
 			perror("receive_packet() error");
 			return -1;
 		}
 	} while(rc_header->type != CONNECTION || rc_packet->type != REQ);
-	LOG("Connection request received!");
+	LOG("Connection request received");
 
 	memcpy(buf, &header, sizeof(header));
 	bufsize += sizeof(header);
 	memcpy(buf + bufsize, &packet, sizeof(packet));
 	bufsize += sizeof(packet);
 
-	if (send_packet(s, src_ip_addr, buf, bufsize)) {
+	if (send_packet(_connection_socket_fd, _connection_ip_addr, buf, bufsize)) {
 		perror("send_packet() error");
 		return -1;
 	}
 
-	return s;
+	return 0;
 }
 
 int run_connect(char * ip_addr) {
-	int s = open_socket();
-
 	char buf[DATAGRAM_SIZE] = {0};
 	int bufsize = 0;
 
@@ -117,15 +115,15 @@ int run_connect(char * ip_addr) {
 	memcpy(buf + bufsize, &packet, sizeof(connection_packet_t));
 	bufsize += sizeof(connection_packet_t);
 
-	if(send_packet(s, ip_addr, buf, bufsize) < 0) {
+	if(send_packet(_connection_socket_fd, ip_addr, buf, bufsize) < 0) {
 		perror("send_packet() error");
 		return -1;
 	}
 
 	while(1) {
-		receive_buf_len = receive_packet(s, receive_buf, DATAGRAM_SIZE, NULL);
+		receive_buf_len = receive_packet(_connection_socket_fd, receive_buf, DATAGRAM_SIZE, NULL);
 		if (receive_buf_len < 0) {
-			printf("receive_packet error!\n");
+			perror("receive_packet error");
 			return -1;
 		}
 
@@ -139,12 +137,13 @@ int run_connect(char * ip_addr) {
 
 	if (rc_packet->code == ACCEPT) {
 		LOG("Connection accepted!");
+		memcpy(_connection_ip_addr, ip_addr, strlen(ip_addr));
 	} else {
 		LOG("Connection denied!");
 		return -2;
 	}
 
-	return s;
+	return 0;
 }
 
 int open_socket() {
