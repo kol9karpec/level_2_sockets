@@ -6,7 +6,7 @@
 
 #include "gamelib.h"
 #include "networking.h"
-#define ARGS_NUM 2
+#define ARGS_NUM 1
 
 static void print_help(FILE * file);
 
@@ -23,14 +23,12 @@ int main(const int argc, const char * argv[]) {
 		goto print_help;
 	} else {
 		if (strcmp(argv[1], "connect") == 0) {
-			if((connection_socket = run_connect((char *)argv[2],
-							atoi((char *)argv[3]),
-							atoi((char *)argv[4]))) == -1) {
+			if((connection_socket = run_connect((char *)argv[2])) == -1) {
 				goto error;
 			}
 			//START game
 		} else if (strcmp(argv[1], "wait") == 0) {
-			if((connection_socket = run_wait(atoi((char *)argv[2]))) == -1) {
+			if((connection_socket = run_wait()) == -1) {
 				goto error;
 			}
 			//Start game

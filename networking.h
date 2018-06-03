@@ -1,5 +1,5 @@
-#ifndef _LIB_H_
-#define _LIB_H_
+#ifndef _NETWORKING_H_
+#define _NETWORKING_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +25,7 @@
 #define DEF_PKTBUFSIZE 2000
 #define BYTES_IN_ROW 16
 #define DATAGRAM_SIZE 4096
+#define IPPROTO_TTT 145
 
 struct pseudo_header
 {
@@ -51,13 +52,48 @@ char * printf_data_hex(char * buf,
 		const void * data,
 		const unsigned int size);
 
-int run_wait(short port);
-int run_connect(char * ip_addr, short dest_port, short our_port);
+/*
+ * Waiting game connection request
+ *
+ * @return -1 if failed, socket file descriptor if succeeded
+ */
+int run_wait();
 
-int send_packet(int sock_fd, char * ip_addr, short dest_port, short src_port,
-		void * data, int size);
-int receive_packet(int sock_fd, short port, void * dest, unsigned size,
-		short * src_port, char * src_ip);
+/*
+ * Requests game connection
+ *
+ * @return -1 if failed, socket file desctiptor if succeeded
+ */
+int run_connect(char * ip_addr);
+
+/*
+ * Sends a ttt packet
+ *
+ * param[in] sock_fs socket file descriptor created with params
+ *		(AF_INET, SOCK_RAW, IPPROTO_TTT)
+ * param[in] dest_ip_addr pointer to a string with ip addr
+ * param[in] data pointer to memory with the ttt packet with header
+ * param[in] size of memory, pointed to by data
+ *
+ * @return 0 if succeeded, -1 if failed
+ */
+int send_packet(int sock_fd, char * dest_ip_addr, void * data, int size);
+
+/*
+ * Receives a ttt packet
+ *
+ * NOTE: Function writes to dest a received packet without ip header
+ *
+ * param[in] sock_fs socket file descriptor created with params
+ *		(AF_INET, SOCK_RAW, IPPROTO_TTT)
+ * param[in] dest pointer to allocated memory where to put received packet
+ * param[in] size size of allocated memory, pointed to by dest
+ * param[in] src_ip pointer to memory with size>=16 to put ip address of the
+ *		received packet if you want to save the addr, NULL if not
+ *
+ * @return length of packet, put to dest if succeeded, -1 if failed
+ */
+int receive_packet(int sock_fd, void * dest, unsigned size, char * src_ip);
 int open_socket();
 
 #endif /* _LIB_H_ */

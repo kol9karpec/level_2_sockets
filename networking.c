@@ -44,14 +44,15 @@ void sigint_handler(int _socket) {
 	exit(0);
 }
 
-int run_wait(short our_port) {
+int run_wait() {
 	int s = open_socket();
+
 	char buf[DATAGRAM_SIZE] = {0};
 	int bufsize = 0;
+
 	char receive_buf[DATAGRAM_SIZE] = {0};
 	int receive_buf_len = 0;
 	char src_ip_addr[16] = {0};
-	short src_port = 0;
 
 	packet_header_t header = {
 		.type = CONNECTION
@@ -62,39 +63,39 @@ int run_wait(short our_port) {
 		.code = ACCEPT
 	};
 
-	packet_header_t * rc_header = NULL;
-	connection_packet_t * rc_packet = NULL;
+	packet_header_t * rc_header = (packet_header_t *)receive_buf;
+	connection_packet_t * rc_packet = (connection_packet_t *)(receive_buf +
+			sizeof(packet_header_t));
 
-	receive_buf_len = receive_packet(s, our_port, receive_buf, DATAGRAM_SIZE,
-			&src_port, src_ip_addr);
-	if (receive_buf_len < 0) {
-		printf("receive_packet error!\n");
-		return -1;
-	}
+	do {
+		receive_buf_len = receive_packet(s, receive_buf, DATAGRAM_SIZE,
+				src_ip_addr);
+		if (receive_buf_len < 0) {
+			perror("receive_packet() error");
+			return -1;
+		}
+	} while(rc_header->type != CONNECTION || rc_packet->type != REQ);
+	printf("Connection request received!\n");
 
-	rc_header = (packet_header_t *)receive_buf;
-	rc_packet = (connection_packet_t *)(receive_buf + sizeof(packet_header_t));
-
-	if (rc_header->type == CONNECTION && rc_packet->type == REQ) {
-		printf("Connection request received!\n");
-	}
-
-	memcpy(buf + bufsize, &header, sizeof(header));
+	memcpy(buf, &header, sizeof(header));
 	bufsize += sizeof(header);
 	memcpy(buf + bufsize, &packet, sizeof(packet));
 	bufsize += sizeof(packet);
 
-	printf("ip_addr to sent = %s\n", src_ip_addr);
-	printf("src_port = %d\n", src_port);
-	send_packet(s, src_ip_addr, src_port, our_port, buf, bufsize);
+	if (send_packet(s, src_ip_addr, buf, bufsize)) {
+		perror("send_packet() error");
+		return -1;
+	}
 
-	return 0;
+	return s;
 }
 
-int run_connect(char * ip_addr, short dest_port, short our_port) {
+int run_connect(char * ip_addr) {
 	int s = open_socket();
+
 	char buf[DATAGRAM_SIZE] = {0};
 	int bufsize = 0;
+
 	char receive_buf[DATAGRAM_SIZE] = {0};
 	int receive_buf_len = 0;
 
@@ -107,146 +108,97 @@ int run_connect(char * ip_addr, short dest_port, short our_port) {
 		.code = ACCEPT
 	};
 
-	packet_header_t * rc_header = NULL;
-	connection_packet_t * rc_packet = NULL;
+	packet_header_t * rc_header = (packet_header_t *)receive_buf;
+	connection_packet_t * rc_packet = (connection_packet_t *)(receive_buf +
+			sizeof(packet_header_t));
 
-	memcpy(buf + bufsize, &header, sizeof(header));
-	bufsize += sizeof(header);
-	memcpy(buf + bufsize, &packet, sizeof(packet));
-	bufsize += sizeof(packet);
+	memcpy(buf + bufsize, &header, sizeof(packet_header_t));
+	bufsize += sizeof(packet_header_t);
+	memcpy(buf + bufsize, &packet, sizeof(connection_packet_t));
+	bufsize += sizeof(connection_packet_t);
 
-	send_packet(s, ip_addr, dest_port, our_port, buf, bufsize);
-
-	receive_buf_len = receive_packet(s, our_port, receive_buf, DATAGRAM_SIZE,
-			NULL, NULL);
-	if (receive_buf_len < 0) {
-		printf("receive_packet error!\n");
+	if(send_packet(s, ip_addr, buf, bufsize) < 0) {
+		perror("send_packet() error");
 		return -1;
 	}
 
-	rc_header = (packet_header_t *)receive_buf;
-	rc_packet = (connection_packet_t *)(receive_buf + sizeof(packet_header_t));
+	do {
+		receive_buf_len = receive_packet(s, receive_buf, DATAGRAM_SIZE, NULL);
+		if (receive_buf_len < 0) {
+			printf("receive_packet error!\n");
+			return -1;
+		}
 
-	if (rc_header->type == CONNECTION && rc_packet->type == RESP &&\
-			rc_packet->code == ACCEPT) {
+	} while (rc_header->type != CONNECTION || rc_packet->type != RESP);
+
+	if (rc_packet->code == ACCEPT) {
 		printf("Connection accepted!\n");
 	} else {
 		printf("Connection denied!\n");
 	}
 
-	return 0;
+	return s;
 }
 
 int open_socket() {
-	int s = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
 	int value = 1;
+	int s = socket(AF_INET, SOCK_RAW, IPPROTO_TTT);
 	if(s == -1)
 	{
 		perror("Failed to create socket");
 		return -1;
 	}
-	setsockopt(s, IPPROTO_IP, SO_REUSEADDR, &value, sizeof(int));
+
+	if(setsockopt(s, IPPROTO_IP, SO_REUSEADDR, &value, sizeof(int)) < 0 )
+	{
+		perror("setsockopt() error");
+		return -1;
+	}
 
 	return s;
 }
 
-int send_packet(int sock_fd, char * ip_addr, short dest_port, short src_port,
-		void * data, int size) {
-	char datagram[DATAGRAM_SIZE],
-		source_ip[32];
+int send_packet(int sock_fd, char * dest_ip_addr, void * data, int size) {
+	char datagram[DATAGRAM_SIZE];
+	unsigned datagram_size = size;
+	struct sockaddr_in sin = {
+		.sin_family = AF_INET,
+		.sin_port = 1010,
+		.sin_addr.s_addr = inet_addr(dest_ip_addr),
+	};
 
-	unsigned datagram_size = sizeof(struct tcphdr) + size;
-
-	struct sockaddr_in sin;
-	struct tcphdr *tcph = (struct tcphdr *)(datagram);
-	struct pseudo_header psh;
-	char * pseudogram;
-	int psize = sizeof(struct pseudo_header) + datagram_size;
-
-	memset(datagram, 0, DATAGRAM_SIZE);
-	memcpy(datagram + sizeof(struct tcphdr), data, size);
-
-	strcpy(source_ip, "127.0.0.1");
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons(dest_port);
-	sin.sin_addr.s_addr = inet_addr(ip_addr);
-
-	tcph->source = htons(src_port);
-	tcph->dest = htons(dest_port);
-	tcph->seq = 0;
-	tcph->ack_seq = 0;
-	tcph->doff = 5;
-	tcph->fin=0;
-	tcph->syn=1;
-	tcph->rst=0;
-	tcph->psh=0;
-	tcph->ack=0;
-	tcph->urg=0;
-	tcph->window = htons(5840); /* maximum allowed window size */
-	tcph->check = 0;
-	tcph->urg_ptr = 0;
-
-	psh.source_address = inet_addr(source_ip);
-	psh.dest_address = sin.sin_addr.s_addr;
-	psh.placeholder = 0;
-	psh.protocol = IPPROTO_TCP;
-	psh.tcp_length = htons(sizeof(struct tcphdr) + size);
-
-	pseudogram = malloc(psize);
-
-	memcpy(pseudogram, (char*)&psh, sizeof(struct pseudo_header));
-	memcpy(pseudogram + sizeof(struct pseudo_header), tcph,
-			sizeof(struct tcphdr) + size);
-
-	tcph->check = csum((unsigned short*) pseudogram , psize);
-
-	if (sendto(sock_fd, datagram, datagram_size,
-				0, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-		perror("sendto failed");
+	memcpy(datagram, data, size);
+	if (sendto(sock_fd, datagram, datagram_size, 0,
+				(struct sockaddr *)&sin,
+				sizeof(struct sockaddr_in)) == -1) {
+		perror("sendto() failed");
 		return -1;
-	} else {
-		printf("Packet send. Length : %d \n" , datagram_size);
 	}
 
 	return 0;
 }
 
-int receive_packet(int sock_fd, short port, void * dest, unsigned size,
-		short * src_port, char * src_ip) {
-	struct tcphdr * tcph = NULL;
-	struct iphdr * iphdr = NULL;
-	char * data = NULL;
-	char buf[DATAGRAM_SIZE];
+int receive_packet(int sock_fd, void * dest, unsigned size, char * src_ip) {
+	char receive_buf[DATAGRAM_SIZE];
+	struct iphdr * iph = (struct iphdr *)receive_buf;
 	int len = 0;
+
+	void * data = receive_buf + sizeof(struct iphdr);
 	int data_len = 0;
-	struct sockaddr_in server_addr = {0};
-	char * src_ip_addr = NULL;
+	char * buf_src_ip;
 
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(port);
-	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-	if(bind(sock_fd, (struct sockaddr *)(&server_addr),
-				sizeof(server_addr))) {
-		perror("bind() error");
+	len = recv(sock_fd, receive_buf, DATAGRAM_SIZE, 0);
+	if(len < 0) {
+		perror("recv() failed");
 		return -1;
 	}
 
-	tcph = (struct tcphdr *)(buf + sizeof(struct iphdr));
-	do {
-		len = recv(sock_fd, buf, DATAGRAM_SIZE, 0);
-	} while(ntohs(tcph->dest) != port || tcph->ack);
-
-	if (src_ip) {
-		iphdr = (struct iphdr *)(buf);
-		src_ip_addr = inet_ntoa(*((struct in_addr *)(&iphdr->saddr)));
-		memcpy(src_ip, src_ip_addr, strlen(src_ip_addr));
+	if(src_ip) {
+		buf_src_ip = inet_ntoa(*((struct in_addr *)&iph->saddr));
+		strcpy(src_ip, buf_src_ip);
 	}
-	if (src_port)
-		*src_port = ntohs(tcph->source);
-	data = (char *)(buf + sizeof(struct tcphdr) + sizeof(struct iphdr));
 
-	data_len = len - sizeof(struct iphdr) - sizeof(struct tcphdr);
+	data_len = len - sizeof(struct iphdr);
 	memcpy(dest, data, data_len % size);
 
 	return data_len;
