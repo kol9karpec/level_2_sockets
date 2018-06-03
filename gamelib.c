@@ -44,11 +44,12 @@ int char_set(field_t * field, int number, char c) {
 	char * matr = field->matr;
 
 	unsigned size = field->size;
-	if(number > size*size) {
+	if(number > size*size || number < 1) {
+		LOG("wrong num of character to set");
 		return -1;
 	}
 
-		matr[number-1] = c;
+	matr[number-1] = c;
 
 	return 0;
 }
@@ -76,14 +77,19 @@ int start_game(player_type_t type) {
 	} else {
 		status = WAITING;
 	}
-	LOG("Game started as %s", type == X ? "X" : "Y");
+	LOG("Game started as %s", type == X ? "X" : "O");
 
 	while (!game_status) {
 		if (status == MOVING) {
 			int my_move;
-			printf("Enter your move: ");
-			scanf("%d", &my_move);
-			move(my_move, type, &play_field);
+			while(1) {
+				printf("Enter your move (%s): ", type == X ? "X" : "O");
+				scanf("%d", &my_move);
+				if(move(my_move, type, &play_field))
+					printf("Wrong move!\n");
+				else
+					break;
+			}
 		} else {
 			wait_move(type, &play_field);
 		}
@@ -136,8 +142,8 @@ int field_status_check(field_t * field) {
 	}
 
 	int flag = 0;
-	for (i=0; i<size; i++) {
-		if(matr[i] != psym[sym] && matr[i] != psym[sym]) {
+	for (i=0; i<size*size; i++) {
+		if(matr[i] != psym[0] && matr[i] != psym[1]) {
 			flag = 1;
 			break;
 		}
@@ -163,7 +169,9 @@ int move(int num, player_type_t type, field_t * field) {
 		LOG("Field is not empty!");
 		return -1;
 	} else {
-		char_set(field, num, symbol);
+		if(char_set(field, num, symbol)) {
+			return -1;
+		}
 		field_draw(field, stdout);
 	}
 
