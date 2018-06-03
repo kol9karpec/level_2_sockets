@@ -1,6 +1,7 @@
+DEBUG_PRINTS=1
 CC=gcc
-CFLAGS= -Wall -Werror 
-OBJS=main.o networking.o gamelib.o
+CFLAGS=-Wall -Werror -DDEBUG_PRINTS=$(DEBUG_PRINTS)
+OBJS=main.o networking.o gamelib.o common.o
 
 main: $(OBJS)
 

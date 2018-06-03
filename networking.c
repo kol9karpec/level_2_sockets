@@ -75,7 +75,7 @@ int run_wait() {
 			return -1;
 		}
 	} while(rc_header->type != CONNECTION || rc_packet->type != REQ);
-	printf("Connection request received!\n");
+	LOG("Connection request received!");
 
 	memcpy(buf, &header, sizeof(header));
 	bufsize += sizeof(header);
@@ -122,19 +122,26 @@ int run_connect(char * ip_addr) {
 		return -1;
 	}
 
-	do {
+	while(1) {
 		receive_buf_len = receive_packet(s, receive_buf, DATAGRAM_SIZE, NULL);
 		if (receive_buf_len < 0) {
 			printf("receive_packet error!\n");
 			return -1;
 		}
 
-	} while (rc_header->type != CONNECTION || rc_packet->type != RESP);
+		if(rc_header->type == CONNECTION && rc_packet->type == RESP) {
+			LOG("our packet");
+			break;
+		} else {
+			LOG("not expected packet");
+		}
+	}
 
 	if (rc_packet->code == ACCEPT) {
-		printf("Connection accepted!\n");
+		LOG("Connection accepted!");
 	} else {
-		printf("Connection denied!\n");
+		LOG("Connection denied!");
+		return -2;
 	}
 
 	return s;
@@ -175,6 +182,8 @@ int send_packet(int sock_fd, char * dest_ip_addr, void * data, int size) {
 		return -1;
 	}
 
+	LOG("Packet sent: ip = %s, len = %d", dest_ip_addr, size);
+
 	return 0;
 }
 
@@ -193,13 +202,14 @@ int receive_packet(int sock_fd, void * dest, unsigned size, char * src_ip) {
 		return -1;
 	}
 
-	if(src_ip) {
-		buf_src_ip = inet_ntoa(*((struct in_addr *)&iph->saddr));
+	buf_src_ip = inet_ntoa(*((struct in_addr *)&iph->saddr));
+	if(src_ip)
 		strcpy(src_ip, buf_src_ip);
-	}
 
 	data_len = len - sizeof(struct iphdr);
 	memcpy(dest, data, data_len % size);
+
+	LOG("Packet received: ip = %s, len = %d", buf_src_ip, data_len);
 
 	return data_len;
 }

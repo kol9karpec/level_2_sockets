@@ -19,6 +19,7 @@
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include "gamelib.h"
+#include "common.h"
 
 #define BIG_BUFSIZE 10000
 #define DEF_BUFSIZE 256
@@ -75,7 +76,7 @@ int run_connect(char * ip_addr);
  * param[in] data pointer to memory with the ttt packet with header
  * param[in] size of memory, pointed to by data
  *
- * @return 0 if succeeded, -1 if failed
+ * @return 0 if succeeded, -1 if failed, -2 if connection denied
  */
 int send_packet(int sock_fd, char * dest_ip_addr, void * data, int size);
 

@@ -6,6 +6,7 @@
 
 #include "gamelib.h"
 #include "networking.h"
+#include "common.h"
 #define ARGS_NUM 1
 
 static void print_help(FILE * file);
